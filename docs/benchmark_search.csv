@@ -1,0 +1,6 @@
+target,posisi,indeks,cmp_linear,time_linear_ms,cmp_binary,time_binary_ms,time_build_index_ms
+O-000001,Awal,0,1,0.0155,17,0.0266,2200.72
+O-100000,Tengah,99999,100000,43.6082,1,0.0102,2200.72
+O-137442,Spesifik,137441,137442,63.8970,17,0.0311,2200.72
+O-199999,Akhir,199998,199999,87.6837,17,0.0287,2200.72
+O-999999,Tidak Ada,-1,200000,85.6006,18,0.0286,2200.72
