@@ -16,32 +16,25 @@ Pastikan Python 3.11+ dan Tkinter tersedia. Klik **Load** terlebih dahulu untuk 
 ## Struktur Repositori
 
 ```
-2EZ4U/
-├── app.py               # Titik masuk aplikasi Tkinter
-├── loader.py            # Pembaca CSV manual (menangani quote)
-├── data/
-│   ├── pesanan.csv      # 200.000 baris data pesanan
-│   └── peta.csv         # Graf simpul jalan pengiriman
-├── backend/
-│   ├── m1_pesanan.py    # M1: Array dinamis + Singly Linked List
-│   ├── m2_antrean.py    # M2: Tumpukan (Stack), Queue Naif, Queue Melingkar, Undo/Redo
-│   ├── m3_laporan.py    # M3: Insertion Sort, Merge Sort, Linear & Binary Search
-│   ├── m4_pencarian.py  # M4: Hash Table (Coming Soon)
-│   ├── m5_katalog.py    # M5: BST & Min-Heap (Coming Soon)
-│   └── m6_peta.py       # M6: Graf & Dijkstra (Coming Soon)
-├── frontend/
-│   └── ui.py            # Antarmuka Tkinter (Menu registry, panel COMMAND, status bar)
-├── tests/
-│   ├── test_m1.py       # Unit test Milestone 1
-│   ├── test_m2.py       # Unit test Milestone 2
-│   └── test_m3.py       # Unit test Milestone 3
-├── tools/
-│   ├── benchmark_m2.py  # Skrip benchmark antrean naif vs melingkar
-│   └── benchmark_m3.py  # Skrip benchmark sorting & searching
-└── docs/
-    ├── benchmark_sort.csv    # Data CSV benchmark sort
-    ├── benchmark_search.csv  # Data CSV benchmark search
-    └── grafik_sort.svg       # Visualisasi grafik perbandingan sort
+2ez4u/
+|-- README.md            <- LAPORANMU
+|
+|-- data/
+|   |-- peta.csv
+|   |-- pesanan.csv
+|
+|-- backend/
+|   |-- m1_pesanan.py    M1: Larik (array) + Rantai (linked list)
+|   |-- m2_antrean.py    M2: AntreanMelingkar + Tumpukan (undo)
+|   |-- m3_laporan.py    M3: insertion sort + binary search
+|   |-- m4_pencarian.py  M4: PetaHash + merge sort
+|   |-- m5_katalog.py    M5: Katalog (BST) + MinHeap (prioritas)
+|   `-- m6_peta.py       M6: Peta (graf) + BFS + Dijkstra
+|
+|-- frontend/            <- ANTARMUKA
+|   |-- ui.py
+|
+|-- app.py               "python app.py" main application
 ```
 
 ---

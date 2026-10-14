@@ -5,6 +5,60 @@ import time, sys, os
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
+DATA_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data'))
+
+def _parse_csv_line(line):
+    """Pisahkan satu baris CSV yang mungkin mengandung koma di dalam quote."""
+    fields = []; cur = ''; in_q = False
+    for ch in line:
+        if ch == '"':  in_q = not in_q
+        elif ch == ',' and not in_q:
+            fields.append(cur); cur = ''
+        else:
+            cur += ch
+    fields.append(cur)
+    return fields
+
+def baca_pesanan(path=None):
+    """Baca pesanan.csv dan kembalikan list of dict."""
+    if not path:
+        path = os.path.join(DATA_DIR, 'pesanan.csv')
+    rows = []
+    with open(path, 'r', encoding='utf-8') as f:
+        header = None
+        for line in f:
+            line = line.rstrip('\r\n')
+            if not line: continue
+            fields = _parse_csv_line(line)
+            if header is None: header = fields; continue
+            row = {}
+            for i, h in enumerate(header):
+                v = fields[i] if i < len(fields) else ''
+                if h in ('harga', 'prioritas'):
+                    row[h] = int(v) if v else 0
+                elif h in ('t_masuk_detik', 't_selesai_detik'):
+                    row[h] = int(v) if v else None
+                else:
+                    row[h] = v
+            rows.append(row)
+    return rows
+
+def baca_peta(path=None):
+    """Baca peta.csv, kembalikan list of (dari, ke, menit)."""
+    if not path:
+        path = os.path.join(DATA_DIR, 'peta.csv')
+    rows = []
+    with open(path, 'r', encoding='utf-8') as f:
+        first = True
+        for line in f:
+            line = line.rstrip('\r\n')
+            if not line: continue
+            if first: first = False; continue
+            parts = line.split(',')
+            if len(parts) < 3: continue
+            rows.append((parts[0].strip(), parts[1].strip(), int(parts[2].strip())))
+    return rows
+
 # --- Theme Colors (matching screenshot reference) ---
 NAVY_HEADER = '#1c344d'
 BG_APP      = '#f4f5f7'
@@ -155,7 +209,7 @@ class App(tk.Tk):
         self._build_body()
         self._build_statusbar()
 
-        self._select_action('arr_reguler')
+        self._select_action('load')
 
     def _build_header(self):
         header = tk.Frame(self, bg=NAVY_HEADER, height=44)
@@ -178,7 +232,7 @@ class App(tk.Tk):
         divider = tk.Frame(body, bg=BORDER_GRAY, width=1)
         divider.pack(side='left', fill='y')
 
-        # Sidebar canvas + scrollbar
+        # Sidebar canvas
         self.sb_canvas = tk.Canvas(sb_container, bg=BG_SIDEBAR, highlightthickness=0, bd=0)
         self.sb_scrollbar = tk.Scrollbar(sb_container, orient='vertical', command=self.sb_canvas.yview)
         self.sb_canvas.configure(yscrollcommand=self.sb_scrollbar.set)
@@ -187,7 +241,6 @@ class App(tk.Tk):
         self.sb_canvas_window = self.sb_canvas.create_window((0, 0), window=self.sb_frame, anchor='nw')
 
         self.sb_canvas.pack(side='left', fill='both', expand=True)
-        self.sb_scrollbar.pack(side='right', fill='y')
 
         self.sb_frame.bind('<Configure>', lambda e: self.sb_canvas.configure(scrollregion=self.sb_canvas.bbox('all')))
         self.sb_canvas.bind('<Configure>', lambda e: self.sb_canvas.itemconfig(self.sb_canvas_window, width=e.width))
@@ -215,15 +268,12 @@ class App(tk.Tk):
         res_border.pack(fill='both', expand=True)
 
         ys = tk.Scrollbar(res_border, orient='vertical')
-        xs = tk.Scrollbar(res_border, orient='horizontal')
         self.result_text = tk.Text(res_border, bg=BG_WHITE, fg=TEXT_DARK,
                                    font=FONT_MONO, relief='flat', bd=0,
                                    highlightthickness=0, wrap='none',
-                                   yscrollcommand=ys.set, xscrollcommand=xs.set)
+                                   yscrollcommand=ys.set)
         ys.config(command=self.result_text.yview)
-        xs.config(command=self.result_text.xview)
         ys.pack(side='right', fill='y')
-        xs.pack(side='bottom', fill='x')
         self.result_text.pack(side='left', fill='both', expand=True)
 
         # Bottom Area: Hint bar + Command Log
@@ -251,7 +301,7 @@ class App(tk.Tk):
         self.hint_frame.pack(fill='x', pady=(6, 0))
         self.hint_label = tk.Label(self.hint_frame, text='', font=('Segoe UI', 8),
                                    bg=HINT_BG, fg=HINT_FG, anchor='w', justify='left',
-                                   wraplength=720, padx=8, pady=6)
+                                   wraplength=760, padx=8, pady=6)
         self.hint_label.pack(fill='x')
 
     def _build_statusbar(self):
@@ -268,6 +318,12 @@ class App(tk.Tk):
         self.status_badge = tk.Label(content_bar, text='siap', bg=NAVY_HEADER, fg='#ffffff',
                                      font=('Consolas', 9, 'bold'), padx=10, pady=1)
         self.status_badge.pack(side='left')
+
+        close_btn = tk.Button(content_bar, text='Tutup', bg='#ffffff', fg='#1e293b',
+                              font=('Segoe UI', 8), relief='solid', bd=1,
+                              padx=12, pady=1, cursor='hand2',
+                              command=self.destroy)
+        close_btn.pack(side='right')
 
     def _populate_sidebar(self):
         for header_title, items in MENU_SECTIONS:
@@ -344,17 +400,33 @@ class App(tk.Tk):
         for w in self.form_frame.winfo_children():
             w.destroy()
 
-        tk.Label(self.form_frame, text=title, font=FONT_TITLE, fg=TEXT_DARK,
-                 bg=BG_WHITE, anchor='w').pack(fill='x', padx=14, pady=(10, 1))
+        header_row = tk.Frame(self.form_frame, bg=BG_WHITE)
+        header_row.pack(fill='x', padx=14, pady=(10, 6))
+
+        # Vertical accent line to the left of the title
+        accent_bar = tk.Frame(header_row, bg='#0f172a', width=3)
+        accent_bar.pack(side='left', fill='y', padx=(0, 10))
+
+        title_box = tk.Frame(header_row, bg=BG_WHITE)
+        title_box.pack(side='left', fill='both', expand=True)
+
+        tk.Label(title_box, text=title, font=FONT_TITLE, fg=TEXT_DARK,
+                 bg=BG_WHITE, anchor='w').pack(fill='x', pady=(0, 1))
         if subtitle:
-            tk.Label(self.form_frame, text=subtitle, font=FONT_SUB, fg=TEXT_SUB,
-                     bg=BG_WHITE, anchor='w').pack(fill='x', padx=14, pady=(0, 8))
+            tk.Label(title_box, text=subtitle, font=FONT_SUB, fg=TEXT_SUB,
+                     bg=BG_WHITE, anchor='w').pack(fill='x')
 
         row_frame = tk.Frame(self.form_frame, bg=BG_WHITE)
-        row_frame.pack(fill='x', padx=14, pady=(0, 8))
+        row_frame.pack(fill='x', padx=14, pady=(4, 10))
 
         entries = {}
-        for lbl_text, default_val, helper_text, field_id in (fields or []):
+        for item in (fields or []):
+            if len(item) == 5:
+                lbl_text, default_val, helper_text, field_id, f_width = item
+            else:
+                lbl_text, default_val, helper_text, field_id = item
+                f_width = 22
+
             field_col = tk.Frame(row_frame, bg=BG_WHITE)
             field_col.pack(side='left', padx=(0, 16))
 
@@ -362,7 +434,7 @@ class App(tk.Tk):
                      bg=BG_WHITE, anchor='w').pack(fill='x')
 
             entry = tk.Entry(field_col, font=FONT_ENTRY, relief='solid', bd=1,
-                             width=22, bg=BG_WHITE, fg='#000000', highlightthickness=0)
+                             width=f_width, bg=BG_WHITE, fg='#000000', highlightthickness=0)
             entry.insert(0, default_val)
             entry.pack(pady=2)
             entries[field_id] = entry
@@ -394,18 +466,16 @@ class App(tk.Tk):
 
         if btn_text:
             btn_col = tk.Frame(row_frame, bg=BG_WHITE)
-            btn_col.pack(side='left', padx=(4, 0), anchor='center')
+            btn_col.pack(side='left', padx=(4, 0), anchor='nw')
 
             def wrapped_cmd():
                 btn_cmd(entries)
 
             b = tk.Button(btn_col, text=btn_text, bg=NAVY_HEADER, fg='#ffffff',
                           activebackground='#2a4d70', activeforeground='#ffffff',
-                          font=FONT_BTN, relief='flat', padx=22, pady=4,
+                          font=FONT_BTN, relief='flat', padx=24, pady=3,
                           cursor='hand2', command=wrapped_cmd)
-            b.pack(pady=(12, 0))
-
-        tk.Frame(self.form_frame, height=1, bg=BORDER_GRAY).pack(fill='x', padx=14, pady=(4, 6))
+            b.pack(pady=(16, 0))
 
     def _ensure_queues(self):
         from backend.m2_antrean import AntreanNaif, AntreanMelingkar, UndoRedo
@@ -424,12 +494,30 @@ class App(tk.Tk):
 
     # ── M1 Handlers ──────────────────────────────────────────────────────────
     def _form_load(self):
-        def do_load(_):
-            from loader import baca_pesanan
+        def do_load(entries):
+            csv_path = entries['path'].get().strip() if 'path' in entries else ''
+            resolved_path = None
+            if csv_path and os.path.exists(csv_path):
+                resolved_path = csv_path
+            else:
+                default_data = os.path.normpath(os.path.join(DATA_DIR, 'pesanan.csv'))
+                if os.path.exists(default_data):
+                    resolved_path = default_data
+                elif csv_path:
+                    resolved_path = csv_path
+
             from backend.m1_pesanan import Array, LinkList
             from backend.m2_antrean import AntreanNaif, AntreanMelingkar, UndoRedo
             t0 = time.perf_counter()
-            rows = baca_pesanan()
+            try:
+                rows = baca_pesanan(resolved_path)
+            except Exception as e:
+                self.result_text.config(state='normal')
+                self.result_text.delete('1.0', 'end')
+                self.result_text.insert('end', f"Gagal membaca file: {e}\n")
+                self.result_text.config(state='disabled')
+                return
+
             state['raw'] = rows
             arr = Array()
             lnk = LinkList()
@@ -462,14 +550,18 @@ class App(tk.Tk):
             self._log('load', 'M1 - larik', elapsed)
             self._set_hint("Data berhasil dimuat. Kedua antrean M2 telah diisi dengan semua pesanan berstatus ANTRE.")
 
+        default_val = r'D:\Phytoncode\2ez4u_5024251005\data\pesanan.csv'
+
         self._render_form(
-            title='Load data CSV',
-            subtitle='Membaca pesanan.csv ke memori untuk Array, LinkedList, dan Antrean M2',
-            fields=[],
+            title='Data: muat pesanan.csv',
+            subtitle='Membaca seluruh baris ke Array, Linked List, dan kedua antrean M2.',
+            fields=[
+                ('Lokasi file CSV', default_val, 'Kosongkan untuk memakai data/pesanan.csv.', 'path', 48)
+            ],
             btn_text='LOAD',
             btn_cmd=do_load
         )
-        self._set_hint("Klik LOAD untuk memuat 200.000 data pesanan dari file CSV.")
+        self._set_hint("Data dibaca sekali dan disimpan pada dua struktur sekaligus. Pesanan berstatus ANTRE ikut dimasukkan ke antrean naif dan circular. Menu lain baru bisa dipakai setelah Load.")
 
     def _form_lihat(self, mode):
         name = 'Array' if mode == 'array' else 'LinkedList'
